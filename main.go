@@ -3,8 +3,9 @@ package main
 import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/sessions"
-	"github.com/gin-contrib/sessions/redis"
+	ginRedis "github.com/gin-contrib/sessions/redis"
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"mybook/internal/repository"
@@ -12,8 +13,10 @@ import (
 	"mybook/internal/service"
 	"mybook/internal/web"
 	"mybook/internal/web/middleware"
+	"mybook/pkg/ginx/ratelimit"
 	"net/http"
 	"strings"
+	"time"
 )
 
 func main() {
@@ -31,6 +34,8 @@ func main() {
 
 func initWebServer() *gin.Engine {
 	server := gin.Default()
+	redisClient := redis.NewClient(&redis.Options{Addr: "192.168.137.132:6379"})
+	server.Use(ratelimit.NewBuilder(redisClient, time.Second, 100).Build())
 	server.Use(cors.New(cors.Config{
 		AllowAllOrigins: false,
 		AllowOrigins:    nil,
@@ -49,11 +54,12 @@ func initWebServer() *gin.Engine {
 	}))
 
 	//store := cookie.NewStore([]byte("secret"))
-	store, err := redis.NewStore(16, "tcp", "webook-redis:11479", "",
+	store, err := ginRedis.NewStore(16, "tcp", "webook-redis:11479", "",
 		[]byte("3o4q6EshoibpRdTB6iPCayquqFmMQzkv"), []byte("naspBhPdXGTMOG9OoRaIukf48sf8WUXU"))
 	if err != nil {
 		panic(err)
 	}
+
 	server.Use(sessions.Sessions("mysession", store))
 	server.Use(middleware.NewLoginJWTMiddlewareBuilder().
 		IgnorePaths("/users/login", "/users/signup").
