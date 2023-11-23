@@ -49,6 +49,11 @@ func (l *LoginJWTMiddlewareBuilder) Build() gin.HandlerFunc {
 			ctx.AbortWithStatus(http.StatusUnauthorized)
 			return
 		}
+		if claims.UserAgent != ctx.Request.UserAgent() {
+			// 存在安全问题, 需要监控
+			ctx.AbortWithStatus(http.StatusUnauthorized)
+			return
+		}
 		ctx.Set("claims", claims)
 	}
 }

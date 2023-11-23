@@ -112,7 +112,11 @@ func (u *UserHandler) LoginJWT(ctx *gin.Context) {
 		ctx.String(http.StatusInternalServerError, "系统错误")
 		return
 	}
-	claims := UserClaims{Uid: user.Id}
+	claims := UserClaims{
+		RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 30))},
+		Uid:              user.Id,
+		UserAgent:        ctx.Request.UserAgent(),
+	}
 	// 生成JWT token
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenStr, err := token.SignedString([]byte("3o4q6EshoibpRdTB6iPCayquqFmMQzkv"))
@@ -242,5 +246,6 @@ func (u *UserHandler) Edit(ctx *gin.Context) {
 
 type UserClaims struct {
 	jwt.RegisteredClaims
-	Uid int64
+	Uid       int64
+	UserAgent string
 }
