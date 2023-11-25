@@ -2,8 +2,8 @@ package repository
 
 import (
 	"context"
-	"mybook/internal/domain"
-	"mybook/internal/repository/dao"
+	"github/yyfzy/mybook/internal/domain"
+	"github/yyfzy/mybook/internal/repository/dao"
 )
 
 var (

@@ -5,8 +5,8 @@ import (
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
-	"mybook/internal/domain"
-	"mybook/internal/service"
+	"github/yyfzy/mybook/internal/domain"
+	"github/yyfzy/mybook/internal/service"
 	"net/http"
 	"time"
 )

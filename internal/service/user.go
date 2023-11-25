@@ -3,9 +3,9 @@ package service
 import (
 	"context"
 	"errors"
+	"github/yyfzy/mybook/internal/domain"
+	"github/yyfzy/mybook/internal/repository"
 	"golang.org/x/crypto/bcrypt"
-	"mybook/internal/domain"
-	"mybook/internal/repository"
 )
 
 var ErrUserDuplicateEmail = repository.ErrUserDuplicateEmail

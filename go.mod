@@ -1,4 +1,4 @@
-module mybook
+module github/yyfzy/mybook
 
 go 1.20
 
