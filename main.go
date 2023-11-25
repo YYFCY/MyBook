@@ -8,6 +8,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	"mybook/config"
 	"mybook/internal/repository"
 	"mybook/internal/repository/dao"
 	"mybook/internal/service"
@@ -54,7 +55,7 @@ func initWebServer() *gin.Engine {
 	}))
 
 	//store := cookie.NewStore([]byte("secret"))
-	store, err := ginRedis.NewStore(16, "tcp", "webook-redis:11479", "",
+	store, err := ginRedis.NewStore(16, "tcp", config.Config.Redis.Addr, "",
 		[]byte("3o4q6EshoibpRdTB6iPCayquqFmMQzkv"), []byte("naspBhPdXGTMOG9OoRaIukf48sf8WUXU"))
 	if err != nil {
 		panic(err)
@@ -76,9 +77,9 @@ func initUser(db *gorm.DB) *web.UserHandler {
 }
 
 func initDB() *gorm.DB {
-	db, err := gorm.Open(mysql.Open("root:root@tcp(webook-mysql:13309)/webook"))
+	//db, err := gorm.Open(mysql.Open("root:root@tcp(webook-mysql:13309)/webook"))
 
-	//db, err := gorm.Open(mysql.Open("root:root@tcp(192.168.137.131:13316)/webook"))
+	db, err := gorm.Open(mysql.Open(config.Config.DB.DSN))
 	if err != nil {
 		panic(err)
 	}
