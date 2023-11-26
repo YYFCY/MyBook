@@ -8,6 +8,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github/yyfzy/mybook/config"
 	"github/yyfzy/mybook/internal/repository"
+	"github/yyfzy/mybook/internal/repository/cache"
 	"github/yyfzy/mybook/internal/repository/dao"
 	"github/yyfzy/mybook/internal/service"
 	"github/yyfzy/mybook/internal/web"
@@ -22,8 +23,9 @@ import (
 
 func main() {
 	db := initDB()
-	server := initWebServer()
-	u := initUser(db)
+	redisClient := initRedis()
+	server := initWebServer(redisClient)
+	u := initUser(db, redisClient)
 	u.RegisterRoutes(server)
 	//server := gin.Default()
 	server.GET("/hello", func(ctx *gin.Context) {
@@ -33,10 +35,9 @@ func main() {
 
 }
 
-func initWebServer() *gin.Engine {
+func initWebServer(client redis.Cmdable) *gin.Engine {
 	server := gin.Default()
-	redisClient := redis.NewClient(&redis.Options{Addr: "192.168.137.132:6379"})
-	server.Use(ratelimit.NewBuilder(redisClient, time.Second, 100).Build())
+	server.Use(ratelimit.NewBuilder(client, time.Second, 100).Build())
 	server.Use(cors.New(cors.Config{
 		AllowAllOrigins: false,
 		AllowOrigins:    nil,
@@ -68,9 +69,10 @@ func initWebServer() *gin.Engine {
 	return server
 }
 
-func initUser(db *gorm.DB) *web.UserHandler {
+func initUser(db *gorm.DB, client redis.Cmdable) *web.UserHandler {
 	ud := dao.NewUserDAO(db)
-	repo := repository.NewUserRepository(ud)
+	uc := cache.NewUserCache(client)
+	repo := repository.NewUserRepository(ud, uc)
 	svc := service.NewUserService(repo)
 	u := web.NewUserHandler(svc)
 	return u
@@ -88,4 +90,12 @@ func initDB() *gorm.DB {
 		panic(err)
 	}
 	return db
+}
+
+func initRedis() redis.Cmdable {
+	// 这里演示读取特定的某个字段
+	cmd := redis.NewClient(&redis.Options{
+		Addr: config.Config.Redis.Addr,
+	})
+	return cmd
 }

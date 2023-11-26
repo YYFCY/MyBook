@@ -229,10 +229,16 @@ func (u *UserHandler) Edit(ctx *gin.Context) {
 		ctx.String(http.StatusBadRequest, "个人简介格式不正确！")
 		return
 	}
-	sess := sessions.Default(ctx)
-	userId := sess.Get("userId")
+
+	uc := ctx.MustGet("claims").(*UserClaims)
+	//sess := sessions.Default(ctx)
+	//userId, ok := sess.Get("userId").(int64)
+	//if !ok {
+	//	ctx.String(http.StatusInternalServerError, "系统错误")
+	//	return
+	//}
 	err = u.svc.UpdateBasicInfo(ctx, domain.User{
-		Id:       userId.(int64),
+		Id:       uc.Uid,
 		Nickname: req.Nickname,
 		AboutMe:  req.AboutMe,
 		Birthday: req.Birthday,
