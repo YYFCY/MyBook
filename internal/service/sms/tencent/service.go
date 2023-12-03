@@ -6,6 +6,7 @@ import (
 	"github.com/ecodeclub/ekit"
 	"github.com/ecodeclub/ekit/slice"
 	sms "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sms/v20210111"
+	mysms "github/yyfzy/mybook/internal/service/sms"
 )
 
 type Service struct {
@@ -22,19 +23,21 @@ func NewService(client *sms.Client, appId string, signName string) *Service {
 	}
 }
 
-func (s *Service) Send(ctx context.Context, tpl string, args []string, numbers ...string) error {
+func (s *Service) Send(ctx context.Context, tpl string, args []mysms.NamedArg, numbers ...string) error {
 	req := sms.NewSendSmsRequest()
 	req.SmsSdkAppId = s.appId
 	req.SignName = s.signName
 	req.TemplateId = ekit.ToPtr(tpl)
 	req.PhoneNumberSet = s.toStringPtrSlice(numbers)
-	req.TemplateParamSet = s.toStringPtrSlice(args)
+	req.TemplateParamSet = slice.Map[mysms.NamedArg, *string](args, func(idx int, src mysms.NamedArg) *string {
+		return &src.Val
+	})
 	resp, err := s.client.SendSmsWithContext(ctx, req)
 	if err != nil {
 		return err
 	}
 	for _, status := range resp.Response.SendStatusSet {
-		if status.Code == nil || *(status.Code) == "Ok" {
+		if status.Code == nil || *(status.Code) != "Ok" {
 			return fmt.Errorf("发送失败 code: %s, 原因: %s", *status.Code, *status.Message)
 		}
 	}
