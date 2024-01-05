@@ -13,13 +13,14 @@ import (
 
 type UserHandler struct {
 	svc         *service.UserService
+	codeSvc     *service.CodeService
 	emailExp    *regexp.Regexp
 	passwordExp *regexp.Regexp
 	nameExp     *regexp.Regexp
 	AboutMeExp  *regexp.Regexp
 }
 
-func NewUserHandler(svc *service.UserService) *UserHandler {
+func NewUserHandler(svc *service.UserService, codeSvc *service.CodeService) *UserHandler {
 	const (
 		emailRegexPattern    = "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"
 		passwordRegexPattern = `^(?=.*[A-Za-z])(?=.*\d)(?=.*[$@$!%*#?&])[A-Za-z\d$@$!%*#?&]{8,}$`
@@ -32,6 +33,7 @@ func NewUserHandler(svc *service.UserService) *UserHandler {
 		passwordExp: regexp.MustCompile(passwordRegexPattern, regexp.None),
 		nameExp:     regexp.MustCompile(nameRegexPattern, regexp.None),
 		AboutMeExp:  regexp.MustCompile(AboutMeRegexPattern, regexp.None),
+		codeSvc:     codeSvc,
 	}
 }
 
@@ -41,9 +43,32 @@ func (u *UserHandler) RegisterRoutes(server *gin.Engine) {
 	ug.POST("/signup", u.SignUp)
 	//ug.POST("/login", u.Login)
 	ug.POST("/login", u.LoginJWT)
-
 	ug.POST("/edit", u.Edit)
 	ug.POST("/logout", u.Logout)
+	ug.POST("/login_sms/code/send", u.SendLoginSMSCode)
+	ug.POST("/login_sms", u.LoginSMS)
+
+}
+
+func (u *UserHandler) LoginSMS(ctx *gin.Context) {
+
+}
+
+func (u *UserHandler) SendLoginSMSCode(ctx *gin.Context) {
+	type Req struct {
+		Phone string `json:"phone"`
+	}
+	var req Req
+	if err := ctx.Bind(&req); err != nil {
+		return
+	}
+	const biz = "login"
+	err := u.codeSvc.Send(ctx, biz, req.Phone)
+	if err != nil {
+		ctx.String(http.StatusInternalServerError, "系统错误")
+		return
+	}
+	ctx.String(http.StatusOK, "发送成功")
 }
 
 func (u *UserHandler) SignUp(ctx *gin.Context) {

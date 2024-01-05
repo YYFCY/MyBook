@@ -11,6 +11,7 @@ import (
 	"github/yyfzy/mybook/internal/repository/cache"
 	"github/yyfzy/mybook/internal/repository/dao"
 	"github/yyfzy/mybook/internal/service"
+	"github/yyfzy/mybook/internal/service/sms/memory"
 	"github/yyfzy/mybook/internal/web"
 	"github/yyfzy/mybook/internal/web/middleware"
 	"github/yyfzy/mybook/pkg/ginx/ratelimit"
@@ -64,17 +65,21 @@ func initWebServer(client redis.Cmdable) *gin.Engine {
 
 	server.Use(sessions.Sessions("mysession", store))
 	server.Use(middleware.NewLoginJWTMiddlewareBuilder().
-		IgnorePaths("/users/login", "/users/signup").
+		IgnorePaths("/users/login", "/users/signup", "/users/login_sms/code/send", "/users/login_sms").
 		Build())
 	return server
 }
 
-func initUser(db *gorm.DB, client redis.Cmdable) *web.UserHandler {
+func initUser(db *gorm.DB, rdb redis.Cmdable) *web.UserHandler {
 	ud := dao.NewUserDAO(db)
-	uc := cache.NewUserCache(client)
+	uc := cache.NewUserCache(rdb)
 	repo := repository.NewUserRepository(ud, uc)
 	svc := service.NewUserService(repo)
-	u := web.NewUserHandler(svc)
+	codeCache := cache.NewCodeCache(rdb)
+	codeRepo := repository.NewCodeRepository(codeCache)
+	smsSvc := memory.NewService()
+	codeSvc := service.NewCodeService(codeRepo, smsSvc)
+	u := web.NewUserHandler(svc, codeSvc)
 	return u
 }
 
