@@ -11,13 +11,16 @@ import (
 	"time"
 )
 
+const biz = "login"
+
 type UserHandler struct {
 	svc         *service.UserService
 	codeSvc     *service.CodeService
 	emailExp    *regexp.Regexp
 	passwordExp *regexp.Regexp
 	nameExp     *regexp.Regexp
-	AboutMeExp  *regexp.Regexp
+	aboutMeExp  *regexp.Regexp
+	phoneExp    *regexp.Regexp
 }
 
 func NewUserHandler(svc *service.UserService, codeSvc *service.CodeService) *UserHandler {
@@ -25,14 +28,16 @@ func NewUserHandler(svc *service.UserService, codeSvc *service.CodeService) *Use
 		emailRegexPattern    = "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"
 		passwordRegexPattern = `^(?=.*[A-Za-z])(?=.*\d)(?=.*[$@$!%*#?&])[A-Za-z\d$@$!%*#?&]{8,}$`
 		nameRegexPattern     = `^[a-zA-Z0-9_]{2,12}$`
-		AboutMeRegexPattern  = `^[\u4E00-\u9FFFa-zA-Z0-9\s.,?!'-]{0,128}$` // 支持中英文，长度限制为0-128个字符
+		aboutMeRegexPattern  = `^[\u4E00-\u9FFFa-zA-Z0-9\s.,?!'-]{0,128}$` // 支持中英文，长度限制为0-128个字符
+		phoneRegexPattern    = `^1[3-9]\d{9}$`
 	)
 	return &UserHandler{
 		svc:         svc,
 		emailExp:    regexp.MustCompile(emailRegexPattern, regexp.None),
 		passwordExp: regexp.MustCompile(passwordRegexPattern, regexp.None),
 		nameExp:     regexp.MustCompile(nameRegexPattern, regexp.None),
-		AboutMeExp:  regexp.MustCompile(AboutMeRegexPattern, regexp.None),
+		aboutMeExp:  regexp.MustCompile(aboutMeRegexPattern, regexp.None),
+		phoneExp:    regexp.MustCompile(phoneRegexPattern, regexp.None),
 		codeSvc:     codeSvc,
 	}
 }
@@ -51,7 +56,44 @@ func (u *UserHandler) RegisterRoutes(server *gin.Engine) {
 }
 
 func (u *UserHandler) LoginSMS(ctx *gin.Context) {
+	type Req struct {
+		Phone string `json:"phone"`
+		Code  string `json:"code"`
+	}
+	var req Req
+	if err := ctx.Bind(&req); err != nil {
+		return
+	}
+	ok, err := u.codeSvc.Verify(ctx, biz, req.Phone, req.Code)
+	if err != nil {
+		ctx.JSON(http.StatusOK, Result{
+			Code: 5,
+			Msg:  "系统错误",
+		})
+		return
+	}
+	if !ok {
+		ctx.JSON(http.StatusOK, Result{
+			Code: 4,
+			Msg:  "验证码错误",
+		})
+		return
+	}
+	user, err := u.svc.FindOrCreate(ctx, req.Phone)
+	if err != nil {
+		ctx.JSON(http.StatusOK, Result{
+			Code: 5,
+			Msg:  "系统错误",
+		})
+	}
+	if err := u.setJWTToken(ctx, user.Id); err != nil {
+		ctx.String(http.StatusInternalServerError, "系统错误")
+		return
+	}
 
+	ctx.JSON(http.StatusOK, Result{
+		Msg: "登录成功",
+	})
 }
 
 func (u *UserHandler) SendLoginSMSCode(ctx *gin.Context) {
@@ -62,13 +104,39 @@ func (u *UserHandler) SendLoginSMSCode(ctx *gin.Context) {
 	if err := ctx.Bind(&req); err != nil {
 		return
 	}
-	const biz = "login"
-	err := u.codeSvc.Send(ctx, biz, req.Phone)
+	// 校验手机号的合法性
+	ok, err := u.phoneExp.MatchString(req.Phone)
 	if err != nil {
-		ctx.String(http.StatusInternalServerError, "系统错误")
+		ctx.JSON(http.StatusInternalServerError, Result{
+			Code: 5,
+			Msg:  "系统错误1",
+		})
 		return
 	}
-	ctx.String(http.StatusOK, "发送成功")
+	if !ok {
+		ctx.JSON(http.StatusOK, Result{
+			Code: 4,
+			Msg:  "输入的手机号格式不正确",
+		})
+		return
+	}
+	err = u.codeSvc.Send(ctx, biz, req.Phone)
+	switch err {
+	case nil:
+		ctx.JSON(http.StatusOK, Result{
+			Msg: "发送成功",
+		})
+	case service.ErrCodeSendTooMany:
+		ctx.JSON(http.StatusOK, Result{
+			Msg: "发送太频繁，请稍后再试",
+		})
+
+	default:
+		ctx.JSON(http.StatusInternalServerError, Result{
+			Code: 5,
+			Msg:  "系统错误",
+		})
+	}
 }
 
 func (u *UserHandler) SignUp(ctx *gin.Context) {
@@ -137,21 +205,28 @@ func (u *UserHandler) LoginJWT(ctx *gin.Context) {
 		ctx.String(http.StatusInternalServerError, "系统错误")
 		return
 	}
+	if err := u.setJWTToken(ctx, user.Id); err != nil {
+		ctx.String(http.StatusInternalServerError, "系统错误")
+		return
+	}
+	ctx.String(http.StatusOK, "登录成功")
+	return
+}
+
+func (u *UserHandler) setJWTToken(ctx *gin.Context, uid int64) error {
 	claims := UserClaims{
 		RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 30))},
-		Uid:              user.Id,
+		Uid:              uid,
 		UserAgent:        ctx.Request.UserAgent(),
 	}
 	// 生成JWT token
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenStr, err := token.SignedString([]byte("3o4q6EshoibpRdTB6iPCayquqFmMQzkv"))
 	if err != nil {
-		ctx.String(http.StatusInternalServerError, "系统错误")
-		return
+		return err
 	}
 	ctx.Header("x-jwt-token", tokenStr)
-	ctx.String(http.StatusOK, "登录成功")
-	return
+	return nil
 }
 
 func (u *UserHandler) Login(ctx *gin.Context) {
@@ -245,7 +320,7 @@ func (u *UserHandler) Edit(ctx *gin.Context) {
 		ctx.String(http.StatusBadRequest, "日期格式不正确！")
 		return
 	}
-	ok, err = u.AboutMeExp.MatchString(req.AboutMe)
+	ok, err = u.aboutMeExp.MatchString(req.AboutMe)
 	if err != nil {
 		ctx.String(http.StatusInternalServerError, "系统错误")
 		return

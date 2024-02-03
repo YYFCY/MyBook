@@ -53,3 +53,24 @@ func (svc *UserService) UpdateBasicInfo(ctx context.Context, u domain.User) erro
 func (svc *UserService) Profile(ctx context.Context, id int64) (domain.User, error) {
 	return svc.repo.FindById(ctx, id)
 }
+
+func (svc UserService) FindOrCreate(ctx context.Context, phone string) (domain.User, error) {
+	// 快路径，先查询，如果存在则直接返回
+	u, err := svc.repo.FindByPhone(ctx, phone)
+	if err != repository.ErrUserNotFound {
+		// nil 与 不为ErrUserNotFound 均会进入此分支
+		return u, err
+	}
+	// 在系统资源不足，触发降级之后不执行慢路径
+	if ctx.Value("降级") == "true" {
+		return domain.User{}, errors.New("系统降级，禁止创建用户")
+	}
+	// 慢路径
+	u = domain.User{Phone: phone}
+	err = svc.repo.Create(ctx, u)
+	if err != nil && err != repository.ErrUserDuplicate {
+		return u, err
+	}
+	// 这里存在主从延迟问题
+	return svc.repo.FindByPhone(ctx, phone)
+}

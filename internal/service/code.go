@@ -12,6 +12,7 @@ var codeTplId = "SMS_154950909"
 
 var (
 	ErrCodeVerifyTooManyTimes = repository.ErrCodeVerifyTooManyTimes
+	ErrCodeSendTooMany        = repository.ErrCodeSendTooMany
 )
 
 type CodeService struct {

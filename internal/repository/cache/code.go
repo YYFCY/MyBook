@@ -50,7 +50,7 @@ func (c *CodeCache) key(biz, phone string) string {
 }
 
 func (c *CodeCache) Verify(ctx context.Context, biz, phone, inputCode string) (bool, error) {
-	res, err := c.client.Eval(ctx, verifyCode, []string{c.key(biz, phone), inputCode}).Int()
+	res, err := c.client.Eval(ctx, verifyCode, []string{c.key(biz, phone)}, inputCode).Int()
 	if err != nil {
 		return false, err
 	}
